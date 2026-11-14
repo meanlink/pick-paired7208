@@ -4,7 +4,8 @@
 
 ## 模块与业务流程
 数据接入（JSON/CSV、字段验证、批次指纹）→ 参数化分析（异步 Python worker）→ 结果复核（指标、图形、明细、解释、批准）→ 定时分发（本地收件箱、CSV/JSON、SHA256）；另有业务总览和审计轨迹。
-三个贯穿全栈的实体：Dataset 数据批次、Job 分析任务、Report 分发计划；辅助 User、Audit、Delivery。
+三个贯穿全栈的实体：Dataset 数据批次、Job 分析任务、Report 分发计划；辅助 User、Audit、Delivery、DatasetRevision。
+批次内测时可更正或撤回：每次修改登记 DatasetRevision 版本快照与依据，关联的排队/运行中/已完成分析自动失效并按新版本重算，已批准简报暂停分发，重算结果复核批准后自动恢复；晚完成的旧计算只归档不采用，失败任务可按当前版本重试，结果页与分发归档均可追溯采用的样本版本。
 
 ## 快速启动
 ```bash
@@ -33,7 +34,7 @@ Role 枚举：admin/analyst/viewer；JobStatus：queued/running/completed/failed
 
 ## 环境变量与 Docker
 COMPOSE_PROJECT_NAME=pick-paired；FRONTEND_PORT=18205；BACKEND_PORT=19205；DB_PORT=17705；DB_PASSWORD、JWT_SECRET 见 .env.example；SEED_DEMO 默认 true。共享命名产物卷供后端下载与 worker 写入，数据库/Redis 各持久卷。
-恰好五服务均有健康检查。Redis 队列加 SQL 排队状态兜底；worker 按 next_run 生成本地收件箱文件。周期 60 秒至 30 天。分发结果为批准分析的固定快照；若需新数据重新计算并建立新计划。当前不连接邮件或企业聊天。
+恰好五服务均有健康检查。Redis 队列加 SQL 排队状态兜底；worker 按 next_run 生成本地收件箱文件。周期 60 秒至 30 天。分发结果为批准分析的固定快照；样本更正后旧结论自动停发，待重算复核恢复，历史归档保留原值。当前不连接邮件或企业聊天。
 错误响应、请求编号、Redis 每 IP 每分钟 240 次限流、JWT 和数据库操作审计。演示密钥与密码仅供本机模拟；生产部署前配置独立密钥与账号。
 
 ## 数据与验收

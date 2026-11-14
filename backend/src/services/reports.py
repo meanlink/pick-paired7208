@@ -4,14 +4,15 @@ from src.models import Job, Report, Delivery
 from src.config.settings import ARTIFACT_DIR
 def create(db, data):
     j=db.get(Job,data.job_id)
-    if not j or j.status!='completed' or not j.approved:
-        raise HTTPException(409,'请先选择已完成且获批准的分析结果')
+    if not j or j.status!='completed' or not j.approved or j.stale:
+        raise HTTPException(409,'请先选择已完成、获批准且样本未失效的分析结果')
     r=Report(name=data.name, job_id=j.id, destination=data.destination, interval_seconds=data.interval_seconds, next_run=time.time()+data.delay_seconds, enabled=True)
     db.add(r); db.flush()
     return r
 def deliver(db, report):
+    if not report.enabled or report.paused: return
     j=db.get(Job,report.job_id)
-    if not j or not j.approved: return
+    if not j or not j.approved or j.stale or j.status!='completed': return
     out=io.StringIO()
     out.write('\ufeff')
     table=j.result.get('table',{})
@@ -29,6 +30,6 @@ def deliver(db, report):
     delivery.filename=f'report-{report.id}-delivery-{delivery.id}.csv'
     os.makedirs(ARTIFACT_DIR,exist_ok=True)
     with open(os.path.join(ARTIFACT_DIR,delivery.filename),'wb') as f:f.write(data)
-    with open(os.path.join(ARTIFACT_DIR,delivery.filename+'.json'),'w') as f: json.dump({'job':j.name,'params':j.params,'result':j.result,'checksum':delivery.checksum},f,ensure_ascii=False,allow_nan=False)
+    with open(os.path.join(ARTIFACT_DIR,delivery.filename+'.json'),'w') as f: json.dump({'job':j.name,'params':j.params,'dataset_version':j.dataset_version,'result':j.result,'checksum':delivery.checksum},f,ensure_ascii=False,allow_nan=False)
     report.next_run=time.time()+report.interval_seconds
     return delivery
